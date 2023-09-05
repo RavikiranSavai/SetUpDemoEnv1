@@ -78,3 +78,103 @@ Deploy your applications in the Kubernetes cluster, specifying PVCs for storage.
 **Step 8: Networking Configuration and Monitoring**
 
 Configure your on-premises network to allow communication between the components. Implement monitoring and maintenance processes for the entire stack to keep it running smoothly.
+
+Prerequisites:
+
+1. set up a local cluster using Minikube or use a cloud-based Kubernetes service like Google Kubernetes Engine (GKE) or Amazon EKS.
+
+2. kubectl command-line tool installed and configured to work with your Kubernetes cluster.
+
+rook operator manifests for Ceph. You can download them from the Rook GitHub repository.
+
+Installation Steps:
+
+Deploy the Rook Operator:
+
+First, create the Rook operator namespace and deploy the operator itself:
+
+bash
+kubectl create namespace rook-ceph
+kubectl apply -f https://github.com/rook/rook/raw/master/cluster/examples/kubernetes/ceph/operator.yaml
+
+========================================================================================================
+Create a Ceph Cluster:
+ceph-cluster.yaml define your Ceph cluster.
+```
+apiVersion: ceph.rook.io/v1
+kind: CephCluster
+metadata:
+  name: rook-ceph
+  namespace: rook-ceph
+spec:
+  cephVersion:
+    image: ceph/ceph:v15
+  dataDirHostPath: /var/lib/rook
+  mon:
+    count: 3
+  dashboard:
+    enabled: true
+ ```
+
+bash
+kubectl apply -f ceph-cluster.yaml
+
+========================================================================================================
+Create Ceph Pools and StorageClass: 
+
+ceph-pool-storageclass.yaml 
+```
+apiVersion: ceph.rook.io/v1
+kind: CephBlockPool
+metadata:
+  name: replicapool
+  namespace: rook-ceph
+spec:
+  replicated:
+    size: 3
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: rook-ceph-block
+provisioner: ceph.rook.io/block
+parameters:
+  blockPool: replicapool
+  clusterName: rook-ceph
+  fstype: ext4
+reclaimPolicy: Delete
+Apply this configuration:
+```
+bash
+kubectl apply -f ceph-pool-storageclass.yaml
+Create Ceph Block PVCs (Persistent Volume Claims):
+========================================================================================================
+PVCs that will utilize the StorageClass you defined
+ ceph-pvc.yaml
+```
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: my-ceph-pvc
+  namespace: default
+spec:
+  storageClassName: rook-ceph-block
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+```
+
+kubectl apply -f ceph-pvc.yaml
+Use the PVC in Your Pods:
+
+========================================================================================================
+
+Monitoring:
+
+Rook provides a Ceph dashboard for monitoring. You can access it through a service created by Rook. To access the Ceph dashboard, you'll need the service's IP and port. You can find this information using:
+
+
+kubectl -n rook-ceph get svc rook-ceph-mgr-dashboard
+Then, access the dashboard using a web browser.
